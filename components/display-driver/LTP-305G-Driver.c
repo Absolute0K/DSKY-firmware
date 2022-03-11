@@ -10,15 +10,16 @@
  * 
  */
 
-#include <stdio.h>
 #include "LTP-305G-Driver.h"
-#include "PCA9548A.h"
+#include "I2C-Mux-Driver.h"
 #include "constants.h"
 #include "esp_log.h"
+#include <string.h>
 
 #define LTP305G_GET_DRIVER_MUX_PORT(x)     (x / NUM_DRIVER_PER_PORT)
 #define LTP305G_GET_DRIVER_ID(x)           (x % NUM_DRIVER_PER_PORT)
 #define LTP305G_GET_DRIVER_ID_FROM_DISP(x) (x / NUM_DISP_PER_DRIVER)
+#define bitRead(value, bit)                (((value) >> (bit)) & 0x01)
 
 static uint8_t buffer[NUM_TOTAL_DISPS];
 
@@ -46,7 +47,6 @@ static esp_err_t set_correct_display_mux(uint8_t display_index)
 static esp_err_t is31fl3730_write(uint8_t driver_id, uint8_t addr, uint8_t val)
 {
     // Send reset I2C commands
-    esp_err_t ret = ESP_OK;
     // Set correct port
     if (set_correct_display_mux(driver_id) != ESP_OK)
     {
@@ -82,10 +82,10 @@ static void col2RowConv(uint8_t digit, uint8_t* row)
 }
 
 
-void ltp305g_begin(uint8_t brightness)
+esp_err_t ltp305g_begin(uint8_t brightness)
 {
     // TODO: Remove the delay?
-    vTaskDelay(15 / portTICK_RATE_MS);
+    vTaskDelay(15 / portTICK_PERIOD_MS);
     esp_err_t ret = ESP_OK;
 
     // Reset the buffer to empty display " " or SPACE
@@ -111,7 +111,7 @@ void ltp305g_begin(uint8_t brightness)
     ltp305g_set_total_brightness(0x00, brightness);
     
     // TODO: Remove the delay?
-    vTaskDelay(15 / portTICK_RATE_MS);
+    vTaskDelay(15 / portTICK_PERIOD_MS);
 
     return ESP_OK;
 }
@@ -169,16 +169,17 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
 
     if (display_id % 2)
     {
-        packets[0] = 0x0E;
-        for(int y = 0; y < 5; y++) packets[y + 1] = ltp_305g_LUT[x * 5 + y];
-        packets[7] = (ch & 0x80) ? 0x40 : 0x00;
-    }
-    else
-    {
         packets[0] = 0x01;
         col2RowConv(x, row);
         for(int rx=0; rx < 7; rx++)
-            packets[rx + 1] = (ch & 0x80) && rx == 6 ? row[rx] | 0x80 : row[rx];
+        packets[rx + 1] = (ch & 0x80) && rx == 6 ? row[rx] | 0x80 : row[rx];
+
+    }
+    else
+    {
+        packets[0] = 0x0E;
+        for(int y = 0; y < 5; y++) packets[y + 1] = ltp_305g_LUT[x * 5 + y];
+        packets[7] = (ch & 0x80) ? 0x40 : 0x00;
     }
 
     ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
@@ -194,14 +195,24 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
     return ltp305g_update(driver_id);
 }
 
-void clear()
+esp_err_t ltp305g_clear()
 {
-    for (int i = 0; i < NUM_TOTAL_DISPS; i++) ltp305g_write_digit(i, ' ');
+    esp_err_t ret = ESP_OK;
+    for (int i = 0; i < NUM_TOTAL_DISPS; i++)
+    {
+        if (ltp305g_write_digit(i, ' ') != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
+    }
+    return ret;
 }
 
-esp_err_t ltp305g_write_digit(char* buf)
+esp_err_t ltp305g_puts(char* buf)
 {
+    esp_err_t ret = ESP_OK;
     for (int i = 0; i < NUM_TOTAL_DISPS; i++)
-        if (i < strlen(buf)) ltp305g_write_digit(i, buf[i]);
-        else                 ltp305g_write_digit(i, ' ');
+    {
+        uint8_t digit = ' ';
+        if (i < strlen(buf)) digit = buf[i];
+        if (ltp305g_write_digit(i, digit) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
+    }
+    return ret;
 }

@@ -1,5 +1,5 @@
 /**
- * @file PCA9548A.h
+ * @file I2C-Mux-Driver.h
  * @author Jae Choi (AbsoluteA0K@gmail.com)
  * @brief PCA9548A I2C Driver for ESP32 Header file (MIT License).
  * Inspired by: https://github.com/sparkfun/SparkFun_I2C_Mux_Arduino_Library

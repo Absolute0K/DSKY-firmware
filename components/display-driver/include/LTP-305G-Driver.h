@@ -16,11 +16,25 @@
 #include <stdint.h>
 #include "driver/i2c.h"
 
-const uint8_t IS31FL3730_DEFAULT_ADDR = 0x60;
-const uint8_t NUM_TOTAL_DRIVERS = 13;
-const uint8_t NUM_DISP_PER_DRIVER = 2;
-const uint8_t NUM_DRIVER_PER_PORT = 4;
-const uint8_t NUM_TOTAL_DISPS = 25;
+#define IS31FL3730_DEFAULT_ADDR (0x60)
+#define NUM_TOTAL_DRIVERS       (13)
+#define NUM_DISP_PER_DRIVER     (2)
+#define NUM_DRIVER_PER_PORT     (4)
+#define NUM_TOTAL_DISPS         (25)
+
+
+esp_err_t ltp305g_begin(uint8_t brightness);
+
+esp_err_t ltp305g_set_total_brightness(uint8_t current, uint8_t brightness);
+
+esp_err_t ltp305g_update(uint8_t driver_id);
+
+esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch);
+
+esp_err_t ltp305g_clear();
+
+esp_err_t ltp305g_puts(char* buf);
+
 
 // ************* LOOK UP TABLE FOR ADDRESSES :( ***************
 const uint8_t driver_addr_LUT[4] = {

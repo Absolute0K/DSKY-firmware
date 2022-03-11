@@ -1,5 +1,5 @@
 /**
- * @file PCA9548A.c
+ * @file I2C-Mux-Driver.c
  * @author Jae Choi (AbsoluteA0K@gmail.com)
  * @brief PCA9548A I2C Driver for ESP32 Source (MIT License).
  *  Inspired by: https://github.com/sparkfun/SparkFun_I2C_Mux_Arduino_Library
@@ -10,9 +10,10 @@
  * 
  */
 
-#include "PCA9548A.h"
+#include "I2C-Mux-Driver.h"
 #include "constants.h"
 #include "esp_log.h"
+#include "driver/i2c.h"
 
 // Default unshifted 7-bit address
 static uint8_t dev_addr = QWIIC_MUX_DEFAULT_ADDRESS;
@@ -20,7 +21,7 @@ static uint8_t dev_addr = QWIIC_MUX_DEFAULT_ADDRESS;
 esp_err_t pca9548_begin(uint8_t i2c_addr, int pin_scl, int pin_sda, uint32_t clk_speed)
 {
     // Check address
-    if (QWIIC_MUX_DEFAULT_ADDRESS <= i2c_addr && i2c_addr <= QWIIC_MUX_MAX_ADDRESS)
+    if (QWIIC_MUX_DEFAULT_ADDRESS > i2c_addr && i2c_addr > QWIIC_MUX_MAX_ADDRESS)
     {
         ESP_LOGE("PCA9548A_I2C", "ADDRESS IS OUT OF BOUNDS: %X", i2c_addr);
         return ESP_ERR_NOT_SUPPORTED;
@@ -51,11 +52,11 @@ esp_err_t pca9548_begin(uint8_t i2c_addr, int pin_scl, int pin_sda, uint32_t clk
 esp_err_t pca9548_is_connected()
 {
     //Write to device, expect a return
-    pca9548_set_port(0xA4);
+    pca9548_set_port_state(0xA4);
     //Set port register to a known value
     uint8_t response[1];
     if (pca9548_get_port_state(response) != ESP_OK) return ESP_ERR_INVALID_RESPONSE;
-    pca9548_set_port(0x00);
+    pca9548_set_port_state(0x00);
     //Disable all ports
     return (response[0] == 0xA4) ? ESP_OK : ESP_ERR_INVALID_RESPONSE;
 }
@@ -63,7 +64,7 @@ esp_err_t pca9548_is_connected()
 
 esp_err_t pca9548_set_port(uint8_t portNumber)
 {
-    uint8_t packet[1] = 0;
+    uint8_t packet[1] = {0};
     if (portNumber > 7)
     {
         ESP_LOGW("PCA9548A_I2C", "PORT IS OUT OF BOUNDS: %X", portNumber);
