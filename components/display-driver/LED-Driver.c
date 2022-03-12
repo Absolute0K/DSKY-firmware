@@ -1,5 +1,5 @@
 /**
- * @file LTP-305G-Driver.c
+ * @file LED-Driver.c
  * @author Jae Choi (AbsoluteA0K@gmail.com)
  * @brief LTP-305G/IS31FL3730 I2C Driver for ESP32 Source file (GNU GPL).
  * Inspired by https://github.com/mlukasek/microdotphat_library
@@ -10,7 +10,7 @@
  * 
  */
 
-#include "LTP-305G-Driver.h"
+#include "LED-Driver.h"
 #include "I2C-Mux-Driver.h"
 #include "constants.h"
 #include "esp_log.h"
@@ -33,14 +33,20 @@ static uint8_t buffer[NUM_TOTAL_DISPS];
 static esp_err_t set_correct_display_mux(uint8_t display_index)
 {
     // Keep track of current port to see if any changes are needed
-    static uint8_t current_port = 0;
+    static uint8_t current_port = -1;
     if (display_index >= NUM_TOTAL_DISPS) return ESP_ERR_NOT_SUPPORTED;
 
     // Calculate the new required port for the I2C mux
     uint8_t new_port = LTP305G_GET_DRIVER_MUX_PORT(display_index);
+
     // Switch if necessary
-    if (current_port != new_port) return pca9548_set_port(new_port);
-    else                          return ESP_OK;
+    if (current_port != new_port)
+    {
+        ESP_LOGV("PCA9548A", "Switching from Port %d to Port %d", current_port, new_port);
+        current_port = new_port;
+        return pca9548_set_port(new_port);
+    }
+    return ESP_OK;
 }
 
 
@@ -50,7 +56,7 @@ static esp_err_t is31fl3730_write(uint8_t driver_id, uint8_t addr, uint8_t val)
     // Set correct port
     if (set_correct_display_mux(driver_id) != ESP_OK)
     {
-        ESP_LOGE("PCA9548A_I2C", "Error Mux Port Switch for Driver ID %d", driver_id);
+        ESP_LOGE("PCA9548A", "Error Mux Port Switch for Driver ID %d", driver_id);
         return ESP_ERR_INVALID_STATE;
     }
     // Send packets
@@ -74,10 +80,10 @@ static void col2RowConv(uint8_t digit, uint8_t* row)
     for (rowindex = 0; rowindex < 7; rowindex++) {
         row[rowindex] = 0;
         row[rowindex] =  (bitRead(ltp_305g_LUT[digit * 5 + 0], rowindex) * 1)
-                                        + (bitRead(ltp_305g_LUT[digit * 5 + 1], rowindex) * 2)
-                                        + (bitRead(ltp_305g_LUT[digit * 5 + 2], rowindex) * 4)
-                                        + (bitRead(ltp_305g_LUT[digit * 5 + 3], rowindex) * 8)
-                                        + (bitRead(ltp_305g_LUT[digit * 5 + 4], rowindex) * 16);
+                       + (bitRead(ltp_305g_LUT[digit * 5 + 1], rowindex) * 2)
+                       + (bitRead(ltp_305g_LUT[digit * 5 + 2], rowindex) * 4)
+                       + (bitRead(ltp_305g_LUT[digit * 5 + 3], rowindex) * 8)
+                       + (bitRead(ltp_305g_LUT[digit * 5 + 4], rowindex) * 16);
     }
 }
 
@@ -105,6 +111,7 @@ esp_err_t ltp305g_begin(uint8_t brightness)
             ESP_LOGE("LTP-305G/IS31FL3730", "Error Configuration Driver ID %d", i);
             return ret;
         }
+        ESP_LOGV("LTP-305G/IS31FL3730", "Successfully Initialized Driver ID %d", i);
     }
 
     // Set brightness to 40mA, brightness
@@ -162,29 +169,35 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
 
     esp_err_t ret = ESP_OK;
     uint8_t driver_id = LTP305G_GET_DRIVER_ID_FROM_DISP(display_id);
-    uint8_t packets[8] = {0x00};
+    uint8_t packets[9] = {0x00};
+    uint8_t packet_size = 0;
     uint8_t row[7];
     uint8_t x = (ch & 0x7F) - 32;
     buffer[display_id - 1] = ch;
 
-    if (display_id % 2)
+    // Even number ID's mean 1st display in the pair, Odd means 2nd display
+    if (display_id % 2) // Odd
     {
+        // The Address, 7 row data
+        packet_size = 8;
         packets[0] = 0x01;
         col2RowConv(x, row);
         for(int rx=0; rx < 7; rx++)
-        packets[rx + 1] = (ch & 0x80) && rx == 6 ? row[rx] | 0x80 : row[rx];
+            packets[rx + 1] = (ch & 0x80) && rx == 6 ? row[rx] | 0x80 : row[rx];
 
     }
-    else
+    else // Even
     {
+        // The Address, 7 column data, 1 decimal data
+        packet_size = 9;
         packets[0] = 0x0E;
         for(int y = 0; y < 5; y++) packets[y + 1] = ltp_305g_LUT[x * 5 + y];
-        packets[7] = (ch & 0x80) ? 0x40 : 0x00;
+        packets[8] = (ch & 0x80) ? 0x40 : 0x00;
     }
 
     ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
-                                     packets, sizeof(packets), 
+                                     packets, packet_size, 
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
     if (ret != ESP_OK)
     {

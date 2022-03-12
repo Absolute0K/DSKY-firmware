@@ -6,12 +6,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_chip_info.h"
+#include "esp_log.h"
 #include "esp_spi_flash.h"
 #include "I2C-Mux-Driver.h"
+#include "LED-Driver.h"
+
 
 void app_main(void)
 {
-    printf("Hello world!\n");
+    ESP_LOGI("MAIN", "Hello world!");
 
     /* Print chip information */
     // esp_chip_info_t chip_info;
@@ -29,14 +32,21 @@ void app_main(void)
 
     // printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
 
-    printf("Installing I2C Driver and checking...\n");
+    ESP_LOGI("MAIN", "Installing I2C Driver and checking...");
 
     esp_err_t ret = pca9548_begin(QWIIC_MUX_DEFAULT_ADDRESS, 19, 18, 100000);
 
-    if (ret != ESP_OK) printf("Shit\n");
+    if (ret != ESP_OK) ESP_LOGE("MAIN", "Shit");
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    printf("Restarting now.\n");
+    ret = ltp305g_begin(0);
+
+    if (ret != ESP_OK) ESP_LOGE("MAIN", "Fuck");
+
+
+    ESP_LOGI("MAIN", "All good. Waiting for keypad\n");
+
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    ESP_LOGI("MAIN", "Restarting now.\n");
 
     fflush(stdout);
     esp_restart();
