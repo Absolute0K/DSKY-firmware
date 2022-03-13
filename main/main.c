@@ -10,7 +10,7 @@
 #include "esp_spi_flash.h"
 #include "I2C-Mux-Driver.h"
 #include "LED-Driver.h"
-
+#include "keypad-component.h"
 
 void app_main(void)
 {
@@ -38,14 +38,27 @@ void app_main(void)
 
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Shit");
 
-    ret = ltp305g_begin(0);
-
+    ret = ltp305g_begin(0x80);
+    ltp305g_set_total_brightness(0x9, 0x80);
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Fuck");
 
 
+    // for (int i = 0; i < NUM_TOTAL_DISPS; i++)
+    // {
+        ret = ltp305g_write_digit(0, 'A');
+        if (ret != ESP_OK) ESP_LOGE("MAIN", "Blyat");
+    // }
+
+    ret = ltp305g_write_digit(NUM_TOTAL_DISPS, 'M');
+    if (ret != ESP_OK) ESP_LOGE("MAIN", "Blyat");
+
     ESP_LOGI("MAIN", "All good. Waiting for keypad\n");
 
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    // ret = keypad_begin(100);
+
+    // if (ret != ESP_OK) ESP_LOGE("MAIN", "Ass");
+
+    vTaskDelay(100000 / portTICK_PERIOD_MS);
     ESP_LOGI("MAIN", "Restarting now.\n");
 
     fflush(stdout);

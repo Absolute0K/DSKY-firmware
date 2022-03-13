@@ -37,7 +37,7 @@ esp_err_t ltp305g_puts(char* buf);
 
 /* Look up tables */
 extern const uint8_t driver_addr_LUT[4];
-extern const uint8_t ltp_305g_LUT[480];
+extern const uint8_t ltp_305g_LUT[485];
 
 
 #endif
