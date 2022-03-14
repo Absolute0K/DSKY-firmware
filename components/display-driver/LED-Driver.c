@@ -158,6 +158,37 @@ esp_err_t ltp305g_update(uint8_t driver_id)
     return ESP_OK;
 }
 
+esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
+{
+    esp_err_t ret = ESP_OK;
+    uint8_t display_id = NUM_TOTAL_DISPS;
+    uint8_t driver_id = LTP305G_GET_DRIVER_ID_FROM_DISP(display_id);
+
+    if (set_correct_display_mux(driver_id) != ESP_OK)
+    {
+        ESP_LOGE("PCA9548A", "Error Mux Port Switch for Driver ID %d", driver_id);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Address
+    packets[0] = 0x01;
+    // printf("Display %d, Driver %d, ID:%d, ADDR:%x LTP-305G/IS31FL3730 Packet(%d): %x %x %x %x %x %x %x %x %x %x %x %x\n",
+            // display_id, driver_id, LTP305G_GET_DRIVER_ID(driver_id), driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], packet_size,
+            // packets[0], packets[1], packets[2], packets[3], packets[4], packets[5], packets[6], packets[7], packets[8], packets[9], packets[10], packets[11]);
+
+    ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
+                                     driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
+                                     packets, packet_size, 
+                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE("LTP-305G/IS31FL3730", "Error Writing Display ID %d", display_id);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return ltp305g_update(driver_id);
+}
+
 
 esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
 {    
@@ -200,19 +231,8 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (display_id == NUM_TOTAL_DISPS)
-    {
-        for(int y = 1; y < 9; y++) packets[y] = 0x0;
-        packets[1] = 0x07;
-        packets[2] = 0x07;
-        packets[3] = 0x07;
-        packets[4] = 0x07;
-        // packets[5] = 0xff;
-        // packets[6] = 0xff;
-    }
-
-    printf("Display %d, Driver %d, ID:%d, ADDR:%x LTP-305G/IS31FL3730 Packet(%d): %x %x %x %x %x %x %x %x %x\n", display_id, driver_id, LTP305G_GET_DRIVER_ID(driver_id), driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], packet_size,
-             packets[0], packets[1], packets[2], packets[3], packets[4], packets[5], packets[6], packets[7], packets[8]);
+    // printf("Display %d, Driver %d, ID:%d, ADDR:%x LTP-305G/IS31FL3730 Packet(%d): %x %x %x %x %x %x %x %x %x\n", display_id, driver_id, LTP305G_GET_DRIVER_ID(driver_id), driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], packet_size,
+            //  packets[0], packets[1], packets[2], packets[3], packets[4], packets[5], packets[6], packets[7], packets[8]);
 
     ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 

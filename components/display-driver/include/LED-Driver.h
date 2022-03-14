@@ -29,6 +29,8 @@ esp_err_t ltp305g_set_total_brightness(uint8_t current, uint8_t brightness);
 
 esp_err_t ltp305g_update(uint8_t driver_id);
 
+esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size);
+
 esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch);
 
 esp_err_t ltp305g_clear();
