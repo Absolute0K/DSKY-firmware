@@ -14,11 +14,17 @@
 
 #include <stdint.h>
 #include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 
-#define NUM_ROWS (7)
-#define NUM_COLS (3)
+#define NUM_COLS  (7)
+#define NUM_ROWS  (3)
+#define NUM_QUEUE (5)
 
 esp_err_t keypad_begin(uint32_t scan_interval_ms);
+
+// Global queue for keystrokes
+QueueHandle_t xQueue_keystrokes;
 
 #endif
 
