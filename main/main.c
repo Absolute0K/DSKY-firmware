@@ -5,12 +5,28 @@
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "esp_chip_info.h"
 #include "esp_log.h"
 #include "esp_spi_flash.h"
 #include "I2C-Mux-Driver.h"
 #include "LED-Driver.h"
 #include "keypad-component.h"
+
+#define PRI_KEYSTROKES (10)
+
+static void v_receiver_keystrokes(void *pvParameters)
+{
+    for (;;)
+        {
+        char recv_key;
+        if (xQueueReceive(xQueue_keystrokes, &recv_key, portMAX_DELAY) == pdPASS)
+        {
+            ESP_LOGI("KEYPAD", "Pressed %c", recv_key);
+            ltp305g_write_digit(24, recv_key);
+        }
+    }
+} 
 
 void app_main(void)
 {
@@ -39,7 +55,7 @@ void app_main(void)
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Shit");
 
     ret = ltp305g_begin(0x80);
-    ltp305g_set_total_brightness(0x9, 0x80);
+    ltp305g_set_total_brightness(0x9, 0x40);
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Fuck");
 
 
@@ -54,11 +70,34 @@ void app_main(void)
 
     ESP_LOGI("MAIN", "All good. Waiting for keypad\n");
 
-    // ret = keypad_begin(100);
+    ret = keypad_begin(100);
 
-    // if (ret != ESP_OK) ESP_LOGE("MAIN", "Ass");
+    if (ret != ESP_OK) ESP_LOGE("MAIN", "Ass");
 
-    vTaskDelay(100000 / portTICK_PERIOD_MS);
+    xTaskCreate(v_receiver_keystrokes, "KeystrokesHandler", 2048, 
+                (void*) NULL, PRI_KEYSTROKES, NULL);
+
+    uint32_t counter = 0, lamp = 0;
+    for (;;)
+    {
+        uint32_t digit = counter;
+        for (int i = 0; i < 6; i++)
+        {
+            ltp305g_write_digit(i, '0' + digit % 10);
+            digit /= 10;
+        }
+        counter++;
+
+        if (counter % 20 == 0)
+        {
+            uint8_t packets[12] = {0};
+            for (int i = 0; i < 12; i++) packets[i] = 0xFF;
+            lamp++;
+            ltp305g_write_lamps(packets, 12);
+        }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
     ESP_LOGI("MAIN", "Restarting now.\n");
 
     fflush(stdout);
