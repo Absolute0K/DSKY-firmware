@@ -190,7 +190,7 @@ esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
 }
 
 
-esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
+esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert)
 {    
     if (display_id > NUM_TOTAL_DISPS + 1)
     {
@@ -225,6 +225,8 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
         packets[8] = (ch & 0x80) ? 0x40 : 0x00;
     }
 
+    if (invert) for (int i = 1; i < 6; i++) packets[i] = ~packets[i];
+
     if (set_correct_display_mux(driver_id) != ESP_OK)
     {
         ESP_LOGE("PCA9548A", "Error Mux Port Switch for Driver ID %d", driver_id);
@@ -247,24 +249,26 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
     return ltp305g_update(driver_id);
 }
 
-esp_err_t ltp305g_clear()
+esp_err_t ltp305g_clear(uint8_t start, uint8_t count)
 {
     esp_err_t ret = ESP_OK;
-    for (int i = 0; i < NUM_TOTAL_DISPS; i++)
+    if (start + count >= NUM_TOTAL_DISPS) return ESP_ERR_INVALID_ARG;
+    for (int i = start; i < start + count; i++)
     {
-        if (ltp305g_write_digit(i, ' ') != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
+        if (ltp305g_write_digit(i, ' ', 0) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
     }
     return ret;
 }
 
-esp_err_t ltp305g_puts(char* buf)
+esp_err_t ltp305g_puts(char* buf, uint8_t start, uint8_t count)
 {
     esp_err_t ret = ESP_OK;
-    for (int i = 0; i < NUM_TOTAL_DISPS; i++)
+    if (start + count >= NUM_TOTAL_DISPS) return ESP_ERR_INVALID_ARG;
+    for (int i = start; i < start + count; i++)
     {
-        uint8_t digit = ' ';
+        uint8_t digit = '0';
         if (i < strlen(buf)) digit = buf[i];
-        if (ltp305g_write_digit(i, digit) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
+        if (ltp305g_write_digit(i, digit, 0) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
     }
     return ret;
 }

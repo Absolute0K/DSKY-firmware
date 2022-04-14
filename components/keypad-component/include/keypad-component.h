@@ -23,8 +23,15 @@
 
 esp_err_t keypad_begin(uint32_t scan_interval_ms);
 
+typedef struct pair_VN
+{
+    uint32_t verb;
+    uint32_t noun;
+} pair_VN_t;
+
 // Global queue for keystrokes
 QueueHandle_t xQueue_keystrokes;
+QueueHandle_t xQueue_VN;
 
 #endif
 

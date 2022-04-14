@@ -22,6 +22,33 @@
 #define NUM_DRIVER_PER_PORT     (4)
 #define NUM_TOTAL_DISPS         (25)
 
+#define DISP_REG0_0             (0)
+#define DISP_REG0_1             (1)
+#define DISP_REG0_2             (2)
+#define DISP_REG0_3             (3)
+#define DISP_REG0_4             (4)
+#define DISP_REG0_5             (5)
+#define DISP_REG1_0             (6)
+#define DISP_REG1_1             (7)
+#define DISP_REG1_2             (8)
+#define DISP_REG1_3             (9)
+#define DISP_REG1_4             (10)
+#define DISP_REG1_5             (11)
+#define DISP_REG2_0             (12)
+#define DISP_REG2_1             (13)
+#define DISP_REG2_2             (14)
+#define DISP_REG2_3             (15)
+#define DISP_REG2_4             (16)
+#define DISP_REG2_5             (17)
+#define DISP_NOUN_0             (18)
+#define DISP_NOUN_1             (19)
+#define DISP_VERB_0             (20)
+#define DISP_VERB_1             (21)
+#define DISP_PROG_0             (22)
+#define DISP_PROG_1             (23)
+#define DISP_COMPACTY           (24)
+#define DISP_LAMP               (25)
+
 
 esp_err_t ltp305g_begin(uint8_t brightness);
 
@@ -31,11 +58,11 @@ esp_err_t ltp305g_update(uint8_t driver_id);
 
 esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size);
 
-esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch);
+esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert);
 
-esp_err_t ltp305g_clear();
+esp_err_t ltp305g_clear(uint8_t start, uint8_t count);
 
-esp_err_t ltp305g_puts(char* buf);
+esp_err_t ltp305g_puts(char* buf, uint8_t start, uint8_t count);
 
 /* Look up tables */
 extern const uint8_t driver_addr_LUT[4];
