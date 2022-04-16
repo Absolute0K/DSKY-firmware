@@ -15,6 +15,9 @@
 
 #include <stdint.h>
 #include "driver/i2c.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
 
 #define IS31FL3730_DEFAULT_ADDR (0x60)
 #define NUM_TOTAL_DRIVERS       (13)
@@ -49,16 +52,22 @@
 #define DISP_COMPACTY           (24)
 #define DISP_LAMP               (25)
 
+typedef struct display_packet
+{
+    uint32_t id;
+    uint8_t digit;
+} display_packet_t;
 
 esp_err_t ltp305g_begin(uint8_t brightness);
 
-esp_err_t ltp305g_set_total_brightness(uint8_t current, uint8_t brightness);
+esp_err_t ltp305g_set_current_bright(uint8_t current, uint8_t brightness, 
+                                     uint8_t start, uint8_t count);
 
 esp_err_t ltp305g_update(uint8_t driver_id);
 
 esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size);
 
-esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert);
+esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch);
 
 esp_err_t ltp305g_clear(uint8_t start, uint8_t count);
 

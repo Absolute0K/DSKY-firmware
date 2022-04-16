@@ -12,13 +12,19 @@
 #include <stdio.h>
 #include "bluetooth-component.h"
 #include "esp_log.h"
+#include "keypad-component.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_gap_bt_api.h"
 #include "esp_bt_device.h"
 #include "esp_spp_api.h"
-#include "keypad-component.h"
 
+static esp_spp_cb_param_t* __param = NULL; 
+
+esp_err_t bluetooth_spp_write(char* str, uint32_t len)
+{
+    return esp_spp_write(__param->write.handle, len, (uint8_t*) str);
+}
 
 static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 {
@@ -31,6 +37,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             esp_bt_dev_set_device_name(EXCAMPLE_DEVICE_NAME);
             esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
             esp_spp_start_srv(ESP_SPP_SEC_NONE, ESP_SPP_ROLE_SLAVE, 0, SPP_SERVER_NAME);
+            __param = param;
             break;
         case ESP_SPP_DISCOVERY_COMP_EVT:
             ESP_LOGI(SPP_TAG, "ESP_SPP_DISCOVERY_COMP_EVT");
@@ -52,10 +59,10 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                     param->data_ind.len, param->data_ind.handle);
             if (param->data_ind.len < 1023)
             {
-                sscanf((char*) param->data_ind.data, "%d%d%d%d%d\n", 
+                sscanf((char*) param->data_ind.data, "%d %d %d %d %d %llu", 
                        &(data_in.GM), &(data_in.invRA), &(data_in.invRB), 
-                       &(data_in.ATX), &(data_in.BURN_BABY_BURN));
-                xQueueSendToBack(xQueue_data_in, &data_in, 1000);
+                       &(data_in.ATX), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
+                xQueueSendToBack(xQueue_data_in, &data_in, portMAX_DELAY);
                 // esp_spp_write(param->write.handle, param->data_ind.len, param->data_ind.data);
             }
             else

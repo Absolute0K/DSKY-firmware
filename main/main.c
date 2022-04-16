@@ -24,6 +24,7 @@
 #include "keypad-component.h"
 #include "uart-component.h"
 #include "bluetooth-component.h"
+#include "atomic-i2c.h"
 #include "time.h"
 #include "sys/time.h"
 
@@ -44,14 +45,17 @@ static void v_reply_AGC(void *pvParameters)
     for (;;)
         {
         /* Constantly update data*/
-        xQueueReceive(xQueue_data_in, &data_in, portMAX_DELAY);
-        xQueueReceive(xQueue_VN, &pair_vn, portMAX_DELAY);
-        printf("<%o%o%c%o%c%o%c%o%c%o>", pair_vn.verb, pair_vn.noun, 
-        (data_in.GM    >= 0) ? '+' : '-', data_in.GM,
-        (data_in.invRA >= 0) ? '+' : '-', data_in.invRA,
-        (data_in.invRB >= 0) ? '+' : '-', data_in.invRB, 
-        (data_in.ATX   >= 0) ? '+' : '-', data_in.ATX);
-
+        if (xQueueReceive(xQueue_VN, &pair_vn, portMAX_DELAY)      == pdTRUE ||
+            xQueueReceive(xQueue_data_in, &data_in, portMAX_DELAY) == pdTRUE)
+        {
+            printf("<%02o%02o%c%05o%c%05o%c%05o%c%05o>\n", pair_vn.verb, pair_vn.noun, 
+            (data_in.GM    >= 0) ? '+' : '-', data_in.GM,
+            (data_in.invRA >= 0) ? '+' : '-', data_in.invRA,
+            (data_in.invRB >= 0) ? '+' : '-', data_in.invRB, 
+            (data_in.ATX   >= 0) ? '+' : '-', data_in.ATX);
+            /* Update time */
+            current_time.tv_sec = (time_t) data_in.mission_time;
+        }
     }
 }
 
@@ -59,6 +63,7 @@ static void v_prog_builtin(void *pvParameters)
 {
     char reg_date[7], reg_time[7], reg_secs[7];
     struct tm* dt;
+    uint32_t counter = 0;
 
     for (;;)
     {
@@ -66,40 +71,55 @@ static void v_prog_builtin(void *pvParameters)
 
         switch (pair_vn.verb)
         {
-        case VERB_RESETIDLE:
-            ltp305g_clear(DISP_REG0_0, DISP_NOUN_0);
-            break;
+            case VERB_RESETIDLE:
+                // ESP_LOGI("MAIN", "State: VERB_CLEAR_DISPLAYS");
+                ltp305g_clear(DISP_REG0_0, DISP_NOUN_0);
+                ltp305g_clear(DISP_PROG_0, 2);
+                break;
 
-        case VERB_MISSIONTIME:
-            dt = localtime(&(current_time.tv_sec));
-            sprintf(reg_date, "%u%u%u", dt->tm_year%100, (dt->tm_mon + 1)%100, (dt->tm_mday)%100);
-            reg_date[1] |= 0x80; reg_date[3] |= 0x80;
-            sprintf(reg_time, "%u%u%u", dt->tm_hour, dt->tm_min, dt->tm_sec); 
-            reg_time[1] |= 0x80; reg_time[3] |= 0x80;
-            sprintf(reg_secs, "%6d", (int) current_time.tv_usec);
-            reg_secs[2] |= 0x80;
-            ltp305g_puts(reg_date, DISP_REG0_0, 6);
-            ltp305g_puts(reg_time, DISP_REG0_1, 6);
-            ltp305g_puts(reg_secs, DISP_REG0_2, 6);
-            break;
+            case VERB_MISSIONTIME:
+                // ESP_LOGI("MAIN", "State: VERB_MISSION_TIME");
+                /* Get mission time */
+                ltp305g_write_digit(DISP_PROG_0, '0');
+                ltp305g_write_digit(DISP_PROG_1, '0');
 
-        case VERB_TESTDISP:
-            /* Every 100 ms */
-            if (current_time.tv_usec % 100000) break;
-            /* Cycle through the characters */
-            for (int i = DISP_REG0_0; i < DISP_NOUN_0; i++)
-            {
-                ltp305g_write_digit(i, '0' + (current_time.tv_usec/100000) % 36, 0);
-            }
-            /* Light up the lamps */
-            uint8_t packets[12] = {0};
-            for (int i = 0; i < 12; i++) packets[i] = 0xFF;
-            ltp305g_write_lamps(packets, 12);
-            break;
-    
-        default:
-            break;
-        }    
+                dt = localtime(&(current_time.tv_sec));
+                sprintf(reg_date, "%02u%02u%02u", dt->tm_year, dt->tm_mon + 1, dt->tm_mday);
+                // printf("%02u%02u%02u ", dt->tm_year, dt->tm_mon + 1, dt->tm_mday);
+                reg_date[2] |= 0x80; reg_date[4] |= 0x80;
+                sprintf(reg_time, "%02u%02u%02u", dt->tm_hour, dt->tm_min, dt->tm_sec); 
+                // printf("%02u%02u%02u ", dt->tm_hour, dt->tm_min, dt->tm_sec); 
+                reg_time[2] |= 0x80; reg_time[4] |= 0x80;
+                sprintf(reg_secs, "%06d", (int) current_time.tv_usec);
+                // printf("%06d\n", (int) current_time.tv_usec);
+                reg_secs[3] |= 0x80;
+                ltp305g_puts(reg_date, DISP_REG2_0, 6);
+                ltp305g_puts(reg_time, DISP_REG1_0, 6);
+                ltp305g_puts(reg_secs, DISP_REG0_0, 6);
+                vTaskDelay(1 / portTICK_PERIOD_MS);
+                break;
+
+            case VERB_TESTDISP:
+                // ESP_LOGI("MAIN", "State: VERB_TEST_DISPLAY");
+                /* Cycle through the characters */
+                for (int i = DISP_REG0_0; i < DISP_NOUN_0; i++)
+                    ltp305g_write_digit(i, '0' + counter);
+                ltp305g_write_digit(DISP_PROG_0, '0' + counter);
+                ltp305g_write_digit(DISP_PROG_1, '0' + counter);
+                counter = (counter + 1) % 10;
+                /* Light up the lamps */
+                uint8_t packets[12] = {0};
+                for (int i = 0; i < 12; i++) packets[i] = 0xFF;
+                ltp305g_write_lamps(packets, 12);
+                vTaskDelay(80 / portTICK_PERIOD_MS);
+                break;
+        
+            default:
+                break;
+        }
+
+        /* Every 20 ms */
+        vTaskDelay(20 / portTICK_PERIOD_MS);   
     }
 }
 
@@ -110,35 +130,20 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
+    ret |= atomic_i2c_begin();
     ESP_ERROR_CHECK(ret);
 
     ESP_LOGI("MAIN", "Hello world!");
     settimeofday(&current_time, NULL);
 
-    /* Print chip information */
-    // esp_chip_info_t chip_info;
-    // esp_chip_info(&chip_info);
-    // printf("This is %s chip with %d CPU core(s), WiFi%s%s, ",
-    //         CONFIG_IDF_TARGET,
-    //         chip_info.cores,
-    //         (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-    //         (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
-
-    // printf("silicon revision %d, ", chip_info.revision);
-
-    // printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-    //         (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-
-    // printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
-
     ESP_LOGI("MAIN", "Installing I2C Driver and checking...");
 
     ret = pca9548_begin(QWIIC_MUX_DEFAULT_ADDRESS, 19, 18, 100000);
-
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Shit");
 
     ret = ltp305g_begin(0x80);
-    ltp305g_set_total_brightness(0x9, 0x40);
+    ret |= ltp305g_set_current_bright(0x8, 0x40, NUM_TOTAL_DRIVERS - 1, 1);
+    ret |= ltp305g_set_current_bright(3, 0x80, 0, NUM_TOTAL_DRIVERS - 1);
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Fuck");
 
     ESP_LOGI("MAIN", "All good. Waiting for keypad\n");
@@ -155,28 +160,13 @@ void app_main(void)
     xTaskCreate(v_prog_builtin, "BuiltinHandler", 2048, 
                 (void*) NULL, PRI_MISSIONBUILTIN, NULL);
 
-    // uint32_t counter = 0;
+    // Default to testing mode
+    pair_vn.verb = VERB_TESTDISP;
+
     for (;;)
     {
-        // uint32_t digit = counter;
-        // for (int i = 0; i < 6; i++)
-        // {
-        //     ltp305g_write_digit(i, '0' + digit % 10);
-        //     digit /= 10;
-        // }
-        // counter++;
-
-        // if (counter % 20 == 0)
-        // {
-        //     uint8_t packets[12] = {0};
-        //     for (int i = 0; i < 12; i++) packets[i] = 0xFF;
-        //     ltp305g_write_lamps(packets, 12);
-        // }
-
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-    ESP_LOGI("MAIN", "Restarting now.\n");
-
     fflush(stdout);
     esp_restart();
 }

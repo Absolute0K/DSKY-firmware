@@ -14,6 +14,7 @@
 #include "constants.h"
 #include "esp_log.h"
 #include "driver/i2c.h"
+#include "atomic-i2c.h"
 
 // Default unshifted 7-bit address
 static uint8_t dev_addr = QWIIC_MUX_DEFAULT_ADDRESS;
@@ -72,7 +73,7 @@ esp_err_t pca9548_set_port(uint8_t portNumber)
     }
     else packet[0] = 1 << portNumber;
 
-    return i2c_master_write_to_device(I2C_MASTER_NUM, dev_addr, 
+    return atomic_i2c_master_write_to_device(I2C_MASTER_NUM, dev_addr, 
                                       packet, sizeof(packet), 
                                       I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
@@ -80,14 +81,14 @@ esp_err_t pca9548_set_port(uint8_t portNumber)
 
 esp_err_t pca9548_set_port_state(uint8_t portBits)
 {
-    return i2c_master_write_to_device(I2C_MASTER_NUM, dev_addr, 
+    return atomic_i2c_master_write_to_device(I2C_MASTER_NUM, dev_addr, 
                                       &portBits, 1, 
                                       I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
 esp_err_t pca9548_get_port_state(uint8_t *state)
 {
-    return i2c_master_read_from_device(I2C_MASTER_NUM, dev_addr, 
+    return atomic_i2c_master_read_from_device(I2C_MASTER_NUM, dev_addr, 
                                        state, 1, 
                                        I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }

@@ -28,10 +28,12 @@ typedef struct data_in
     int32_t invRB;
     int32_t ATX;
     int32_t BURN_BABY_BURN;
+    uint64_t mission_time;
 } data_in_t;
 
 QueueHandle_t xQueue_data_in;
 
+esp_err_t bluetooth_spp_write(char* str, uint32_t len);
 esp_err_t bluetooth_begin();
 
 #endif

@@ -13,6 +13,7 @@
 #include "uart-component.h"
 #include "esp_log.h"
 #include "LED-Driver.h"
+#include "bluetooth-component.h"
 
 static QueueHandle_t xQueue_UART0;
 
@@ -83,8 +84,9 @@ static void uart_display_task(void *pvParameters)
     uart_pkt_t packet = {0};
     int32_t dsky_REG0, dsky_REG1, dsky_REG2, res_dva, res_dvatx, res_dvb, res_dvbtx, dsky_prog;
     uint8_t lamps[13] = {0}; 
+    char str_output[40] = {0};
     char str_REG0[7] = {0}, str_REG1[7] = {0}, str_REG2[7] = {0}, str_PROG[3] = {0};
-
+    
     for (;;)
     {
         /* Waiting for UART event. */
@@ -101,14 +103,21 @@ static void uart_display_task(void *pvParameters)
             /* PERFORM DENORMALIZATION */
 
             /* Display on DSKY */
-            sprintf(str_REG0, "%c%5d", (dsky_REG0 >= 0) ? '+' : '-', dsky_REG0);
-            sprintf(str_REG1, "%c%5d", (dsky_REG1 >= 0) ? '+' : '-', dsky_REG1);
-            sprintf(str_REG2, "%c%5d", (dsky_REG2 >= 0) ? '+' : '-', dsky_REG2);
-            sprintf(str_PROG, "%2d", dsky_prog);
+            sprintf(str_REG0, "%c%05d", (dsky_REG0 >= 0) ? '+' : '-', dsky_REG0);
+            sprintf(str_REG1, "%c%05d", (dsky_REG1 >= 0) ? '+' : '-', dsky_REG1);
+            sprintf(str_REG2, "%c%05d", (dsky_REG2 >= 0) ? '+' : '-', dsky_REG2);
+            sprintf(str_PROG, "%02d", dsky_prog);
             ltp305g_puts(str_REG0, DISP_REG0_0, 6);
             ltp305g_puts(str_REG0, DISP_REG1_0, 6);
             ltp305g_puts(str_REG0, DISP_REG2_0, 6);
             ltp305g_puts(str_REG0, DISP_PROG_0, 2);
+
+            /* Output to Python Visualizer */
+            
+            sprintf(str_output, "%05d %05d %05d %05d %02d\n", 
+                    res_dva, res_dvatx, res_dvb, res_dvbtx, dsky_prog);
+            bluetooth_spp_write(str_output, 40);
+
         }
     }
 }

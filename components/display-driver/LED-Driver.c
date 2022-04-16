@@ -14,15 +14,17 @@
 #include "I2C-Mux-Driver.h"
 #include "constants.h"
 #include "esp_log.h"
+#include "atomic-i2c.h"
 #include <string.h>
 
+#define PRI_DISP_EVENT                     (4)
 #define LTP305G_GET_DRIVER_MUX_PORT(x)     (x / NUM_DRIVER_PER_PORT)
 #define LTP305G_GET_DRIVER_ID(x)           (x % NUM_DRIVER_PER_PORT)
 #define LTP305G_GET_DRIVER_ID_FROM_DISP(x) (x / NUM_DISP_PER_DRIVER)
 #define bitRead(value, bit)                (((value) >> (bit)) & 0x01)
 
 static uint8_t buffer[NUM_TOTAL_DISPS];
-
+static SemaphoreHandle_t xSemaphore_displays;
 
 /**
  * @brief Set the PCA9548A I2C MUX ports correctly to make sure the
@@ -61,7 +63,7 @@ static esp_err_t is31fl3730_write(uint8_t driver_id, uint8_t addr, uint8_t val)
     }
     // Send packets
     uint8_t packet[2] = {addr, val};
-    return i2c_master_write_to_device(I2C_MASTER_NUM, 
+    return atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
                                       driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
                                       packet, sizeof(packet), 
                                       I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -115,20 +117,24 @@ esp_err_t ltp305g_begin(uint8_t brightness)
     }
 
     // Set brightness to 40mA, brightness
-    ltp305g_set_total_brightness(0x00, brightness);
+    ltp305g_set_current_bright(0x00, brightness, 0, NUM_TOTAL_DRIVERS);
     
     // TODO: Remove the delay?
     vTaskDelay(15 / portTICK_PERIOD_MS);
+
+    // Create  and start task
+    xSemaphore_displays = xSemaphoreCreateMutex();
+    if (xSemaphore_displays == NULL) return ESP_ERR_NO_MEM;
 
     return ESP_OK;
 }
 
 
-esp_err_t ltp305g_set_total_brightness(uint8_t current, uint8_t brightness)
+esp_err_t ltp305g_set_current_bright(uint8_t current, uint8_t brightness, uint8_t start, uint8_t count)
 {
     esp_err_t ret = ESP_OK;
 
-    for (int i = 0; i < NUM_TOTAL_DRIVERS; i++)
+    for (int i = start; i < start + count; i++)
     {
         // Send current data
         if (is31fl3730_write(i, 0x0D, current) != ESP_OK)
@@ -164,6 +170,8 @@ esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
     uint8_t display_id = NUM_TOTAL_DISPS;
     uint8_t driver_id = LTP305G_GET_DRIVER_ID_FROM_DISP(display_id);
 
+    xSemaphoreTake(xSemaphore_displays, portMAX_DELAY);
+
     if (set_correct_display_mux(driver_id) != ESP_OK)
     {
         ESP_LOGE("PCA9548A", "Error Mux Port Switch for Driver ID %d", driver_id);
@@ -172,11 +180,7 @@ esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
 
     // Address
     packets[0] = 0x01;
-    // printf("Display %d, Driver %d, ID:%d, ADDR:%x LTP-305G/IS31FL3730 Packet(%d): %x %x %x %x %x %x %x %x %x %x %x %x\n",
-            // display_id, driver_id, LTP305G_GET_DRIVER_ID(driver_id), driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], packet_size,
-            // packets[0], packets[1], packets[2], packets[3], packets[4], packets[5], packets[6], packets[7], packets[8], packets[9], packets[10], packets[11]);
-
-    ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
+    ret = atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
                                      packets, packet_size, 
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -186,17 +190,22 @@ esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
         return ESP_ERR_INVALID_ARG;
     }
 
-    return ltp305g_update(driver_id);
+    ret = ltp305g_update(driver_id);
+
+    xSemaphoreGive(xSemaphore_displays);
+
+    return ret;
 }
 
-
-esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert)
+esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
 {    
     if (display_id > NUM_TOTAL_DISPS + 1)
     {
         ESP_LOGE("LTP-305G/IS31FL3730", "Incorrect Display ID %d", display_id);
         return ESP_ERR_INVALID_ARG;
     }
+
+    xSemaphoreTake(xSemaphore_displays, portMAX_DELAY);
 
     esp_err_t ret = ESP_OK;
     uint8_t driver_id = LTP305G_GET_DRIVER_ID_FROM_DISP(display_id);
@@ -225,8 +234,6 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert)
         packets[8] = (ch & 0x80) ? 0x40 : 0x00;
     }
 
-    if (invert) for (int i = 1; i < 6; i++) packets[i] = ~packets[i];
-
     if (set_correct_display_mux(driver_id) != ESP_OK)
     {
         ESP_LOGE("PCA9548A", "Error Mux Port Switch for Driver ID %d", driver_id);
@@ -236,7 +243,7 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert)
     // printf("Display %d, Driver %d, ID:%d, ADDR:%x LTP-305G/IS31FL3730 Packet(%d): %x %x %x %x %x %x %x %x %x\n", display_id, driver_id, LTP305G_GET_DRIVER_ID(driver_id), driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], packet_size,
             //  packets[0], packets[1], packets[2], packets[3], packets[4], packets[5], packets[6], packets[7], packets[8]);
 
-    ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
+    ret = atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
                                      packets, packet_size, 
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -246,7 +253,11 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch, uint8_t invert)
         return ESP_ERR_INVALID_ARG;
     }
 
-    return ltp305g_update(driver_id);
+    ret = ltp305g_update(driver_id);
+
+    xSemaphoreGive(xSemaphore_displays);
+
+    return ret;
 }
 
 esp_err_t ltp305g_clear(uint8_t start, uint8_t count)
@@ -255,7 +266,7 @@ esp_err_t ltp305g_clear(uint8_t start, uint8_t count)
     if (start + count >= NUM_TOTAL_DISPS) return ESP_ERR_INVALID_ARG;
     for (int i = start; i < start + count; i++)
     {
-        if (ltp305g_write_digit(i, ' ', 0) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
+        if (ltp305g_write_digit(i, ' ') != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
     }
     return ret;
 }
@@ -264,11 +275,12 @@ esp_err_t ltp305g_puts(char* buf, uint8_t start, uint8_t count)
 {
     esp_err_t ret = ESP_OK;
     if (start + count >= NUM_TOTAL_DISPS) return ESP_ERR_INVALID_ARG;
-    for (int i = start; i < start + count; i++)
+    for (int i = 0; i < count; i++)
     {
         uint8_t digit = '0';
-        if (i < strlen(buf)) digit = buf[i];
-        if (ltp305g_write_digit(i, digit, 0) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
+        if (i < strlen(buf)) digit = buf[count - i - 1];
+        if (ltp305g_write_digit(i + start, digit) != ESP_OK) ret = ESP_ERR_NOT_FINISHED;
     }
     return ret;
 }
+

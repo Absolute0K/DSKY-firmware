@@ -11,18 +11,19 @@ static int id = 1;
 static uint64_t row_LUT[NUM_ROWS] = {17, 16, 15};
 static uint64_t col_LUT[NUM_COLS] = {0, 2, 4, 5, 12, 13, 14};
 static uint8_t char_LUT[NUM_ROWS][NUM_COLS] = {
-    {'+', '7', '8', '9', 'C', 'N', 'R'},
+    {'+', '7', '8', '9', 'C', 'N', 'E'},
     {'-', '4', '5', '6', 'P', 'V', ' '},
-    {'0', '1', '2', '3', 'K', 'E', ' '},
+    {'0', '1', '2', '3', 'K', 'R', ' '},
 };
-static enum states_VN {WAIT_VERB, INPUT_VERB, WAIT_NOUN, INPUT_NOUN, ENTER};
+enum states_VN {WAIT_VERB, INPUT_VERB, WAIT_NOUN, INPUT_NOUN, ENTER};
+
 
 static void v_receiver_keystrokes(void *pvParameters)
 {
     enum states_VN state = WAIT_VERB;
-    uint32_t counter = 0;
+    uint32_t counter = 0, update_ok = 1;
     pair_VN_t pair_vn = {0};
-    pair_VN_t pair_vn_prev = {0};
+    pair_VN_t pair_vn_new = {0};
 
     for (;;)
     {
@@ -37,70 +38,73 @@ static void v_receiver_keystrokes(void *pvParameters)
 
             switch (state)
             {
-                case WAIT_VERB:
-                    /* Clear VERB/NOUN and highlight displays if VERB is pressed */
-                    pair_vn.verb = 0;
-                    pair_vn.noun = 0;
-                    if (recv_key == 'V')
-                    {
-                        ltp305g_write_digit(DISP_VERB_0, ' ', 1);
-                        ltp305g_write_digit(DISP_VERB_1, ' ', 1);
-                        ltp305g_write_digit(DISP_NOUN_0, ' ', 1);
-                        ltp305g_write_digit(DISP_NOUN_1, ' ', 1);
-                        state = INPUT_VERB;
-                    }
-                    else
-                    {
-                        // OPERR
-                    }
-                    break;
                 case INPUT_VERB:
-                    counter = (counter + 1) % 2;
-                    recv_key -= '0';
-                    if (recv_key > 9)
+                    ESP_LOGI("KEYPAD", "STATE: INPUT_VERB %d : %c", counter, recv_key);
+                    if ('0' <= recv_key && recv_key <= '9')
                     {
-                        // TODO: LIGHT UP OPERR
-                        state = WAIT_VERB;
-                        break;
-                    }
-                    ltp305g_write_digit(DISP_VERB_1 - counter, recv_key + '0', 0);
-                    pair_vn.verb = pair_vn.verb * 10 + recv_key;
-                    state = (counter > 1) ? INPUT_VERB : WAIT_NOUN;
+                        ltp305g_write_digit(DISP_VERB_1 - counter, recv_key);
+                        pair_vn_new.verb = pair_vn_new.verb * 10 + recv_key - '0';
+                        state = (counter == 1) ? WAIT_NOUN : INPUT_VERB;
+                        counter = (counter + 1) % 2;
+                    } else state = WAIT_VERB;
                     break;
                 case WAIT_NOUN:
-                    if (recv_key == 'V')
-                        state = INPUT_VERB;
-                    else
-                    {
-                        state = WAIT_VERB;
-                        // OPERR
-                    }
+                    ESP_LOGI("KEYPAD", "STATE: WAIT_NOUN: %c", recv_key);
+                    ltp305g_write_digit(DISP_NOUN_0, '_');
+                    ltp305g_write_digit(DISP_NOUN_1, '_');
+
+                    if (recv_key == 'N') state = INPUT_NOUN;
+                    else state = WAIT_VERB;
                     break;
                 case INPUT_NOUN:
-                    counter = (counter + 1) % 2;
-                    recv_key -= '0';
-                    if (recv_key > 9)
+                    ESP_LOGI("KEYPAD", "STATE: INPUT_NOUN %d %c", counter, recv_key);
+                    if ('0' <= recv_key && recv_key <= '9')
                     {
-                        // TODO: LIGHT UP OPERR
-                        state = WAIT_VERB;
-                        break;
-                    }
-                    ltp305g_write_digit(DISP_NOUN_1 - counter, recv_key + '0', 0);
-                    pair_vn.noun = pair_vn.noun * 10 + recv_key;
-                    state = (counter > 1) ? INPUT_NOUN : ENTER;
+                        ltp305g_write_digit(DISP_NOUN_1 - counter, recv_key);
+                        pair_vn_new.noun = pair_vn_new.noun * 10 + recv_key - '0';
+                        state = (counter == 1) ? ENTER : INPUT_NOUN;
+                        counter = (counter + 1) % 2;                        
+                    } else state = WAIT_VERB;
                     break;
                 case ENTER:
+                    ESP_LOGI("KEYPAD", "STATE: ENTER: %c", recv_key);
                     if (recv_key == 'E')
                     {
+                        ESP_LOGI("KEYPAD", "STATE: ENTER GO");
                         // Maybe a task for COMPACTY and LAMPS?
-                        xQueueSendToBack(xQueue_VN, &pair_vn, 1000);
                         state = WAIT_VERB;
-                        pair_vn_prev = pair_vn;
-                    }
-                    else
+                        pair_vn = pair_vn_new;
+                        xQueueSendToBack(xQueue_VN, &pair_vn, portMAX_DELAY);
+                        ESP_LOGI("KEYPAD", "VERB: %d NOUN: %d", pair_vn.verb, pair_vn.noun);
+                        update_ok = 1;
+                    } else state = WAIT_VERB;
+                    // break; // NO BREAKING
+                case WAIT_VERB:
+                    ESP_LOGI("KEYPAD", "STATE: WAIT_VERB: %c", recv_key);
+                    /* Check error condition */
+                    if (!update_ok)
                     {
-                        // OPERR
-                        state = WAIT_VERB;
+                        ESP_LOGI("KEYPAD", "STATE: OPERATOR ERROR: %c", recv_key);
+                    }
+                    /* Clear VERB/NOUN and highlight displays if VERB is pressed */
+                    pair_vn_new.verb = 0;
+                    pair_vn_new.noun = 0;
+                    counter = 0;
+                    update_ok = 1;
+                    /* Write to display */
+                    ltp305g_write_digit(DISP_NOUN_0, pair_vn.noun % 10 + '0');
+                    ltp305g_write_digit(DISP_NOUN_1, pair_vn.noun / 10 + '0');
+                    ltp305g_write_digit(DISP_VERB_0, pair_vn.verb % 10 + '0');
+                    ltp305g_write_digit(DISP_VERB_1, pair_vn.verb / 10 + '0');
+
+                    if (recv_key == 'V')
+                    {
+                        ltp305g_write_digit(DISP_VERB_0, '_');
+                        ltp305g_write_digit(DISP_VERB_1, '_');
+                        ltp305g_write_digit(DISP_NOUN_0, '#');
+                        ltp305g_write_digit(DISP_NOUN_1, '#');
+                        state = INPUT_VERB;
+                        update_ok = 0;
                     }
                     break;
                 default:
@@ -144,7 +148,7 @@ static void keypad_timer_callback(TimerHandle_t xTimer)
                 if (char_status[row][col] == 0)
                 {
                     // Send to queue if keystroke is detected
-                    xQueueSendToBack(xQueue_keystrokes, &(char_LUT[row][col]), 1000);
+                    xQueueSendToBack(xQueue_keystrokes, &(char_LUT[row][col]), portMAX_DELAY);
                     char_status[row][col] = 1;
                 }
             }
