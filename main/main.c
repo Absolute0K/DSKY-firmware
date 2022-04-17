@@ -72,26 +72,21 @@ static void v_prog_builtin(void *pvParameters)
         switch (pair_vn.verb)
         {
             case VERB_RESETIDLE:
-                // ESP_LOGI("MAIN", "State: VERB_CLEAR_DISPLAYS");
                 ltp305g_clear(DISP_REG0_0, DISP_NOUN_0);
                 ltp305g_clear(DISP_PROG_0, 2);
                 break;
 
             case VERB_MISSIONTIME:
-                // ESP_LOGI("MAIN", "State: VERB_MISSION_TIME");
                 /* Get mission time */
                 ltp305g_write_digit(DISP_PROG_0, '0');
                 ltp305g_write_digit(DISP_PROG_1, '0');
 
                 dt = localtime(&(current_time.tv_sec));
                 sprintf(reg_date, "%02u%02u%02u", dt->tm_year, dt->tm_mon + 1, dt->tm_mday);
-                // printf("%02u%02u%02u ", dt->tm_year, dt->tm_mon + 1, dt->tm_mday);
                 reg_date[2] |= 0x80; reg_date[4] |= 0x80;
                 sprintf(reg_time, "%02u%02u%02u", dt->tm_hour, dt->tm_min, dt->tm_sec); 
-                // printf("%02u%02u%02u ", dt->tm_hour, dt->tm_min, dt->tm_sec); 
                 reg_time[2] |= 0x80; reg_time[4] |= 0x80;
                 sprintf(reg_secs, "%06d", (int) current_time.tv_usec);
-                // printf("%06d\n", (int) current_time.tv_usec);
                 reg_secs[3] |= 0x80;
                 ltp305g_puts(reg_date, DISP_REG2_0, 6);
                 ltp305g_puts(reg_time, DISP_REG1_0, 6);
@@ -100,7 +95,6 @@ static void v_prog_builtin(void *pvParameters)
                 break;
 
             case VERB_TESTDISP:
-                // ESP_LOGI("MAIN", "State: VERB_TEST_DISPLAY");
                 /* Cycle through the characters */
                 for (int i = DISP_REG0_0; i < DISP_NOUN_0; i++)
                     ltp305g_write_digit(i, '0' + counter);
@@ -153,6 +147,9 @@ void app_main(void)
 
     ret = bluetooth_begin();
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Damn");
+
+    ret = uart_begin();
+    if (ret != ESP_OK) ESP_LOGE("MAIN", "Crap");
 
     xTaskCreate(v_reply_AGC, "ReplyAGCHandler", 2048, 
                 (void*) NULL, PRI_AGC_REPLY, NULL);

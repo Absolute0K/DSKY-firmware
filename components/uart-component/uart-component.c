@@ -16,6 +16,8 @@
 #include "bluetooth-component.h"
 
 static QueueHandle_t xQueue_UART0;
+const char char_SOP = '<';
+const char char_EOP = '>';
 
 #define PRI_UART_EVENT      (8)
 #define PRI_UART_DISP       (7)
@@ -25,7 +27,7 @@ static void uart_event_task(void *pvParameters)
     uart_event_t event;
     uint8_t data_uart[1024] = {0};
     uart_pkt_t packet = {0};
-    uint32_t index_packet = 0;
+    uint32_t index_packet = 0, len;
 
     for (;;)
     {
@@ -35,23 +37,29 @@ static void uart_event_task(void *pvParameters)
             switch(event.type) {
                 /* Event of UART receving data */
                 case UART_DATA:
-                    uart_read_bytes(UART_NUM_0, &data_uart, event.size, portMAX_DELAY);
-                    for (int i = 0; i < event.size; i++)
+                    len = uart_read_bytes(UART_NUM_0, &data_uart, event.size, portMAX_DELAY);
+                    printf("Got: ");
+                    for (int i = 0; i < len; i++)
                     {
-                        if (data_uart[i] != char_SOP || index_packet == 0) continue;
+                        printf("%c\n", data_uart[i]);
+                        if (data_uart[i] != char_SOP && index_packet == 0) continue;
                         /* If we find the SOP */
-                        for (int j = i; j < event.size && index_packet < UART_PKT_SIZE; j++)
+                        printf("Found: ");
+                        for (int j = i; j < len && index_packet < UART_PKT_SIZE; j++)
                         {
+                            printf("%c[%d] ", data_uart[j], index_packet);
                             packet.data[index_packet] = data_uart[j];
                             index_packet++;
                         }
                         /* Validate index and EOP */
-                        if (index_packet == UART_PKT_SIZE && packet.data[index_packet-2] == char_EOP)
+                        if (index_packet == UART_PKT_SIZE)
                         {
-                            xQueueSend(xQueue_packets, &packet, portMAX_DELAY);
+                            printf("\nSend: %s\n", packet.data);
+                            if (packet.data[index_packet-1] == char_EOP)
+                                xQueueSend(xQueue_packets, &packet, portMAX_DELAY);
                             index_packet = 0;
+                            break;
                         }
-                        break;
                     }
                     break;
                 /* Event of HW FIFO overflow detected */
@@ -82,7 +90,7 @@ static void uart_event_task(void *pvParameters)
 static void uart_display_task(void *pvParameters)
 {
     uart_pkt_t packet = {0};
-    int32_t dsky_REG0, dsky_REG1, dsky_REG2, res_dva, res_dvatx, res_dvb, res_dvbtx, dsky_prog;
+    uint32_t dsky_REG0, dsky_REG1, dsky_REG2, res_dva, res_dvatx, res_dvb, res_dvbtx, dsky_prog;
     uint8_t lamps[13] = {0}; 
     char str_output[40] = {0};
     char str_REG0[7] = {0}, str_REG1[7] = {0}, str_REG2[7] = {0}, str_PROG[3] = {0};
@@ -93,9 +101,14 @@ static void uart_display_task(void *pvParameters)
         if (xQueueReceive(xQueue_packets, &packet, (TickType_t) portMAX_DELAY))
         {
             /* Scan: <DSKYREG1_DSKYREG2_DSKYREG3_PROGNUM_LAMPS_DVA_DVATX_DVB_DVBTX> */
-            sscanf(packet.data, "%*c%5o%5o%5o%2o%12s%5o%5o%5o%5o%*c",
+            packet.data[UART_PKT_SIZE - 1] = 0;
+            // sscanf(packet.data + 1, "%6o%6o%6o%2o%12s%6o%6o%6o%6o",
+            sscanf(packet.data + 1, "%*c%5o%*c%5o%*c%5o%2o%12s%*c%5o%*c%5o%*c%5o%*c%5o",
                    &dsky_REG0, &dsky_REG1, &dsky_REG2, &dsky_prog, lamps, 
                    &res_dva,   &res_dvatx, &res_dvb,   &res_dvbtx);
+            printf("%o %o %o %o %12s %o %o %o %o\n",
+                   dsky_REG0, dsky_REG1, dsky_REG2, dsky_prog, lamps, 
+                   res_dva,   res_dvatx, res_dvb,   res_dvbtx);
 
             /* Ignore if AGC wants to display mission time */
             if (dsky_REG0 == 0x7FFF || dsky_REG1 == 0x7FFF || dsky_REG2 == 0x7FFF) continue;
@@ -113,7 +126,6 @@ static void uart_display_task(void *pvParameters)
             ltp305g_puts(str_REG0, DISP_PROG_0, 2);
 
             /* Output to Python Visualizer */
-            
             sprintf(str_output, "%05d %05d %05d %05d %02d\n", 
                     res_dva, res_dvatx, res_dvb, res_dvbtx, dsky_prog);
             bluetooth_spp_write(str_output, 40);
@@ -142,11 +154,11 @@ esp_err_t uart_begin()
     if (ret != ESP_OK) ESP_LOGE("UART", "Error configuring UART0 driver");
 
     /* Create a task to handler UART event from ISR */
-    xTaskCreate(uart_event_task,   "uart_event_task", 2048, NULL, PRI_UART_EVENT, NULL);
-    xTaskCreate(uart_display_task, "uart_display_task", 2048, NULL, PRI_UART_DISP, NULL);
-
     xQueue_packets = xQueueCreate(20, sizeof(uart_pkt_t));
     if (xQueue_packets == NULL) return ESP_ERR_NO_MEM;
+
+    xTaskCreate(uart_event_task,   "uart_event_task", 8192, NULL, PRI_UART_EVENT, NULL);
+    xTaskCreate(uart_display_task, "uart_display_task", 2048, NULL, PRI_UART_DISP, NULL);
 
     return ret;
 }

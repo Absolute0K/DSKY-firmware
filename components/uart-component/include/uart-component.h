@@ -19,8 +19,6 @@
 
 #define UART_BUF_SIZE           (1024)
 #define UART_PKT_SIZE           (1+3*6+2+12+4*6+1)
-const char char_SOP = '<';
-const char char_EOP = '>';
 
 QueueHandle_t xQueue_packets;
 
