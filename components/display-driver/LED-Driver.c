@@ -25,7 +25,7 @@
 
 static uint8_t buffer[NUM_TOTAL_DISPS];
 static SemaphoreHandle_t xSemaphore_displays;
-
+static char state_lamps[12] = "000000000000";
 /**
  * @brief Set the PCA9548A I2C MUX ports correctly to make sure the
  * correct I2C driver is being communicated. NOTE: Static local function.
@@ -164,7 +164,13 @@ esp_err_t ltp305g_update(uint8_t driver_id)
     return ESP_OK;
 }
 
-esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
+esp_err_t ltp305g_write_lamp(uint32_t index, uint8_t value)
+{
+    state_lamps[index] = value + '0';
+    return ltp305g_write_lamps(state_lamps);
+}
+
+esp_err_t ltp305g_write_lamps(char* str_lamps)
 {
     esp_err_t ret = ESP_OK;
     uint8_t display_id = NUM_TOTAL_DISPS;
@@ -177,12 +183,24 @@ esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
         ESP_LOGE("PCA9548A", "Error Mux Port Switch for Driver ID %d", driver_id);
         return ESP_ERR_INVALID_STATE;
     }
-
     // Address
+    uint8_t packets[4] = {0};
     packets[0] = 0x01;
+    for (int i = 0; i < 12; i++)
+    {
+        // Except for KEY_REL, OPR_ERROR (special). Can only be adjusted manually
+        // Set lamp state
+        state_lamps[i] = (i == LAMP_KEY_REL || i == LAMP_OPR_ERROR) ?
+                          state_lamps[i] : str_lamps[i];
+        // through write_lamp(..)
+        packets[((11 - i)/4) + 1] |= (state_lamps[i] - '0') << (3 - (i % 4));
+    }
+
+    
+
     ret = atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
-                                     packets, packet_size, 
+                                     packets, 4, 
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
     if (ret != ESP_OK)
     {
@@ -191,7 +209,6 @@ esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size)
     }
 
     ret = ltp305g_update(driver_id);
-
     xSemaphoreGive(xSemaphore_displays);
 
     return ret;

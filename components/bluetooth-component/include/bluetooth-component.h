@@ -23,6 +23,8 @@
 
 typedef struct data_in
 {
+    uint32_t verb;
+    uint32_t noun;
     int32_t GM;
     int32_t invRA;
     int32_t invRB;
@@ -31,7 +33,8 @@ typedef struct data_in
     uint64_t mission_time;
 } data_in_t;
 
-QueueHandle_t xQueue_data_in;
+struct timeval current_time;
+data_in_t data_in;
 
 esp_err_t bluetooth_spp_write(char* str, uint32_t len);
 esp_err_t bluetooth_begin();

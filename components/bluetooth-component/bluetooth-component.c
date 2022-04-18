@@ -19,7 +19,10 @@
 #include "esp_bt_device.h"
 #include "esp_spp_api.h"
 
+#define NUM_BLU_PKTS        (50)
+
 static uint32_t __handle = 0; 
+// static data_in_t data_in = {0};
 
 esp_err_t bluetooth_spp_write(char* str, uint32_t len)
 {
@@ -28,8 +31,8 @@ esp_err_t bluetooth_spp_write(char* str, uint32_t len)
 
 static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 {
-    data_in_t data_in = {0};
-
+    uint32_t  index_packet = 0;
+    uint8_t   strbuf[NUM_BLU_PKTS] = {0};
     switch (event)
     {
         case ESP_SPP_INIT_EVT:
@@ -60,12 +63,28 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                     param->data_ind.len, param->data_ind.handle);
             if (param->data_ind.len < 1023)
             {
-                sscanf((char*) param->data_ind.data, "%d %d %d %d %d %llu", 
-                       &(data_in.GM), &(data_in.invRA), &(data_in.invRB), 
-                       &(data_in.ATX), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
-                xQueueSendToBack(xQueue_data_in, &data_in, portMAX_DELAY);
-                __handle = param->write.handle;
-                esp_spp_write(param->write.handle, param->data_ind.len, param->data_ind.data);
+                for (int i = 0; i < param->data_ind.len; i++)
+                {
+                    if (param->data_ind.data[i] != '<' && index_packet == 0) continue;
+                    /* If we find the SOP */
+                    for (int j = i; j < param->data_ind.len; j++)
+                    {
+                        strbuf[index_packet] = param->data_ind.data[j];
+                        /* Validate index and EOP */
+                        if (strbuf[index_packet] == '>' && index_packet < NUM_BLU_PKTS-1)
+                        {
+                            strbuf[index_packet + 1] ='\0';
+                            // <+01234+12345+23456+34567 123 123123>
+                            sscanf((char*) strbuf, "<%*c%05o%*c%05o%*c%05o%*c%05o %d %llu>", 
+                                   &(data_in.GM), &(data_in.invRA), &(data_in.invRB), 
+                                   &(data_in.ATX), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
+                            output_AGC_uart(data_in, pair_vn);
+                            index_packet = 0;
+                            break;
+                        }
+                        index_packet++;
+                    }
+                }
             }
             else
             {
@@ -80,6 +99,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             break;
         case ESP_SPP_SRV_OPEN_EVT:
             ESP_LOGI(SPP_TAG, "ESP_SPP_SRV_OPEN_EVT");
+            __handle = param->write.handle;
             break;
         default:
             break;
@@ -89,8 +109,6 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 
 void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
-    char bda_str[18] = {0};
-
     switch (event) {
         case ESP_BT_GAP_AUTH_CMPL_EVT:{
             if (param->auth_cmpl.stat == ESP_BT_STATUS_SUCCESS) {
@@ -131,9 +149,7 @@ esp_err_t bluetooth_begin()
 {
     esp_err_t ret = ESP_OK;
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
-
-    xQueue_data_in = xQueueCreate(20, sizeof(data_in_t));
-    if (xQueue_data_in == NULL) return ESP_ERR_NO_MEM;
+    data_in = (data_in_t) {0};
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     if (esp_bt_controller_init(&bt_cfg) != ESP_OK) {

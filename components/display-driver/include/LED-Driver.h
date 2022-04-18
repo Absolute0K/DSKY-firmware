@@ -52,6 +52,19 @@
 #define DISP_COMPACTY           (24)
 #define DISP_LAMP               (25)
 
+#define LAMP_UPLINK_ACTY        (0)
+#define LAMP_TEMP               (1)
+#define LAMP_HOLD               (2)
+#define LAMP_PROG               (3)
+#define LAMP_FREE               (4)
+#define LAMP_RESTART            (5)
+#define LAMP_NO_ATT             (6)
+#define LAMP_TRACKER            (7)
+#define LAMP_STBY               (8)
+#define LAMP_EMPTY              (9)
+#define LAMP_KEY_REL            (10)
+#define LAMP_OPR_ERROR          (11)
+
 typedef struct display_packet
 {
     uint32_t id;
@@ -65,7 +78,9 @@ esp_err_t ltp305g_set_current_bright(uint8_t current, uint8_t brightness,
 
 esp_err_t ltp305g_update(uint8_t driver_id);
 
-esp_err_t ltp305g_write_lamps(uint8_t* packets, uint32_t packet_size);
+esp_err_t ltp305g_write_lamp(uint32_t index, uint8_t value);
+
+esp_err_t ltp305g_write_lamps(char* str_lamps);
 
 esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch);
 

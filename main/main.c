@@ -36,28 +36,6 @@
 #define VERB_RESETIDLE     (07)
 #define VERB_PROGCHNG      (39)
 
-static struct timeval current_time = {0};
-static data_in_t data_in = {0};
-static pair_VN_t pair_vn = {0};
-
-static void v_reply_AGC(void *pvParameters)
-{
-    for (;;)
-        {
-        /* Constantly update data*/
-        if (xQueueReceive(xQueue_VN, &pair_vn, portMAX_DELAY)      == pdTRUE ||
-            xQueueReceive(xQueue_data_in, &data_in, portMAX_DELAY) == pdTRUE)
-        {
-            printf("<%02o%02o%c%05o%c%05o%c%05o%c%05o>\n", pair_vn.verb, pair_vn.noun, 
-            (data_in.GM    >= 0) ? '+' : '-', data_in.GM,
-            (data_in.invRA >= 0) ? '+' : '-', data_in.invRA,
-            (data_in.invRB >= 0) ? '+' : '-', data_in.invRB, 
-            (data_in.ATX   >= 0) ? '+' : '-', data_in.ATX);
-            /* Update time */
-            current_time.tv_sec = (time_t) data_in.mission_time;
-        }
-    }
-}
 
 static void v_prog_builtin(void *pvParameters)
 {
@@ -74,12 +52,21 @@ static void v_prog_builtin(void *pvParameters)
             case VERB_RESETIDLE:
                 ltp305g_clear(DISP_REG0_0, DISP_NOUN_0);
                 ltp305g_clear(DISP_PROG_0, 2);
+                ltp305g_write_lamps("000000000000");
+                ltp305g_write_lamp(LAMP_STBY, 1);
+                ltp305g_write_digit(DISP_COMPACTY, ' ');
                 break;
 
             case VERB_MISSIONTIME:
                 /* Get mission time */
+                ltp305g_write_lamps("000000000000");
+                ltp305g_write_lamp(LAMP_EMPTY, 1);
+                ltp305g_write_lamp(LAMP_PROG, 1);
+                ltp305g_write_lamp(LAMP_STBY, 1);
+
                 ltp305g_write_digit(DISP_PROG_0, '0');
                 ltp305g_write_digit(DISP_PROG_1, '0');
+                ltp305g_write_digit(DISP_COMPACTY, '#');
 
                 dt = localtime(&(current_time.tv_sec));
                 sprintf(reg_date, "%02u%02u%02u", dt->tm_year, dt->tm_mon + 1, dt->tm_mday);
@@ -91,7 +78,6 @@ static void v_prog_builtin(void *pvParameters)
                 ltp305g_puts(reg_date, DISP_REG2_0, 6);
                 ltp305g_puts(reg_time, DISP_REG1_0, 6);
                 ltp305g_puts(reg_secs, DISP_REG0_0, 6);
-                vTaskDelay(1 / portTICK_PERIOD_MS);
                 break;
 
             case VERB_TESTDISP:
@@ -100,14 +86,16 @@ static void v_prog_builtin(void *pvParameters)
                     ltp305g_write_digit(i, '0' + counter);
                 ltp305g_write_digit(DISP_PROG_0, '0' + counter);
                 ltp305g_write_digit(DISP_PROG_1, '0' + counter);
+                ltp305g_write_digit(DISP_COMPACTY, '#');
                 counter = (counter + 1) % 10;
+                ltp305g_write_digit(DISP_COMPACTY, (counter % 2) ? '#' : ' ');
                 /* Light up the lamps */
-                uint8_t packets[12] = {0};
-                for (int i = 0; i < 12; i++) packets[i] = 0xFF;
-                ltp305g_write_lamps(packets, 12);
-                vTaskDelay(80 / portTICK_PERIOD_MS);
+                if (counter > 4)  ltp305g_write_lamps("000000000000");
+                else              ltp305g_write_lamps("111111111100");
+                vTaskDelay(60 / portTICK_PERIOD_MS);
                 break;
         
+            case VERB_PROGCHNG:
             default:
                 break;
         }
@@ -128,6 +116,8 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     ESP_LOGI("MAIN", "Hello world!");
+    current_time.tv_sec = 0;
+    current_time.tv_usec = 0;
     settimeofday(&current_time, NULL);
 
     ESP_LOGI("MAIN", "Installing I2C Driver and checking...");
@@ -150,9 +140,6 @@ void app_main(void)
 
     ret = uart_begin();
     if (ret != ESP_OK) ESP_LOGE("MAIN", "Crap");
-
-    xTaskCreate(v_reply_AGC, "ReplyAGCHandler", 2048, 
-                (void*) NULL, PRI_AGC_REPLY, NULL);
 
     xTaskCreate(v_prog_builtin, "BuiltinHandler", 2048, 
                 (void*) NULL, PRI_MISSIONBUILTIN, NULL);
