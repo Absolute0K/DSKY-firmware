@@ -63,7 +63,7 @@ static esp_err_t is31fl3730_write(uint8_t driver_id, uint8_t addr, uint8_t val)
     }
     // Send packets
     uint8_t packet[2] = {addr, val};
-    return atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
+    return i2c_master_write_to_device(I2C_MASTER_NUM, 
                                       driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
                                       packet, sizeof(packet), 
                                       I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -198,7 +198,7 @@ esp_err_t ltp305g_write_lamps(char* str_lamps)
 
     
 
-    ret = atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
+    ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
                                      packets, 4, 
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -260,7 +260,7 @@ esp_err_t ltp305g_write_digit(uint8_t display_id, uint8_t ch)
     // printf("Display %d, Driver %d, ID:%d, ADDR:%x LTP-305G/IS31FL3730 Packet(%d): %x %x %x %x %x %x %x %x %x\n", display_id, driver_id, LTP305G_GET_DRIVER_ID(driver_id), driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], packet_size,
             //  packets[0], packets[1], packets[2], packets[3], packets[4], packets[5], packets[6], packets[7], packets[8]);
 
-    ret = atomic_i2c_master_write_to_device(I2C_MASTER_NUM, 
+    ret = i2c_master_write_to_device(I2C_MASTER_NUM, 
                                      driver_addr_LUT[LTP305G_GET_DRIVER_ID(driver_id)], 
                                      packets, packet_size, 
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);

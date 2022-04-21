@@ -25,11 +25,12 @@ typedef struct data_in
 {
     uint32_t verb;
     uint32_t noun;
-    int32_t GM;
-    int32_t invRA;
-    int32_t invRB;
-    int32_t ATX;
-    int32_t BURN_BABY_BURN;
+    int32_t  GM;
+    int32_t  invRA;
+    int32_t  invRB;
+    int32_t  ATX;
+    int32_t  scale;
+    int32_t  BURN_BABY_BURN;
     uint64_t mission_time;
 } data_in_t;
 

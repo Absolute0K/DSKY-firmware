@@ -74,10 +74,12 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                         if (strbuf[index_packet] == '>' && index_packet < NUM_BLU_PKTS-1)
                         {
                             strbuf[index_packet + 1] ='\0';
-                            // <+01234+12345+23456+34567 123 123123>
-                            sscanf((char*) strbuf, "<%*c%05o%*c%05o%*c%05o%*c%05o %d %llu>", 
+                            // <+01234+12345+23456+34567 10 123 123123>
+                            // <+02322+30071+02322+30071 10 123 123123>
+                            // <+20000+20000+20000+20000 10 123 123123>
+                            sscanf((char*) strbuf, "<%*c%05o%*c%05o%*c%05o%*c%05o %d %d %llu>", 
                                    &(data_in.GM), &(data_in.invRA), &(data_in.invRB), 
-                                   &(data_in.ATX), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
+                                   &(data_in.ATX), &(data_in.scale), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
                             output_AGC_uart(data_in, pair_vn);
                             index_packet = 0;
                             break;
@@ -150,6 +152,7 @@ esp_err_t bluetooth_begin()
     esp_err_t ret = ESP_OK;
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
     data_in = (data_in_t) {0};
+    data_in.scale = 1;
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     if (esp_bt_controller_init(&bt_cfg) != ESP_OK) {

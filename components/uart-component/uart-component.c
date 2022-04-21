@@ -22,6 +22,7 @@ const char char_EOP = '>';
 
 #define PRI_UART_EVENT      (8)
 #define PRI_UART_DISP       (7)
+#define SCALE_FLOAT         (16384.0)
 
 static void uart_event_task(void *pvParameters)
 {
@@ -51,7 +52,7 @@ static void uart_event_task(void *pvParameters)
                         /* Validate index and EOP */
                         if (index_packet == UART_PKT_SIZE)
                         {
-                            printf("Send: %s\n", packet.data);
+                            // printf("Send: %s\n", packet.data);
                             if (packet.data[index_packet-1] == char_EOP)
                                 xQueueSend(xQueue_packets, &packet, portMAX_DELAY);
                             index_packet = 0;
@@ -95,7 +96,7 @@ static void uart_display_task(void *pvParameters)
     for (;;)
     {
         /* Waiting for UART event. */
-        if (xQueueReceive(xQueue_packets, &packet, (TickType_t) portMAX_DELAY))
+        if (xQueueReceive(xQueue_packets, &packet, (TickType_t) 3000 / portTICK_PERIOD_MS))
         {
             /* Scan: <DSKYREG1_DSKYREG2_DSKYREG3_PROGNUM_LAMPS_DVA_DVATX_DVB_DVBTX> */
             packet.data[UART_PKT_SIZE - 1] = 0;
@@ -106,16 +107,25 @@ static void uart_display_task(void *pvParameters)
                    &res_dva,   &res_dvatx, &res_dvb,   &res_dvbtx);
 
             /* Ignore if AGC wants to display mission time or calculations are not done yet */
-            if (dsky_REG0 == 0x7FFF || dsky_REG1 == 0x7FFF || dsky_REG2 == 0x7FFF || 
-                res_dva == 0 || res_dvatx == 0 || res_dvb == 0 || res_dvbtx == 0 ||
-                pair_vn.verb != 39) continue;
+            // if (dsky_REG0 == 0x7FFF || dsky_REG1 == 0x7FFF || dsky_REG2 == 0x7FFF || 
+            //     res_dva == 0 || res_dvatx == 0 || res_dvb == 0 || res_dvbtx == 0 ||
+            if (pair_vn.verb != 39) continue;
 
             /* PERFORM DENORMALIZATION */
 
             /* Display on DSKY */
-            sprintf(str_REG0, "%c%05d", (dsky_REG0 >= 0) ? '+' : '-', dsky_REG0);
-            sprintf(str_REG1, "%c%05d", (dsky_REG1 >= 0) ? '+' : '-', dsky_REG1);
-            sprintf(str_REG2, "%c%05d", (dsky_REG2 >= 0) ? '+' : '-', dsky_REG2);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-overflow"
+            sprintf(str_REG0, "%c%05d", (dsky_REG0 >= 0) ? '+' : '-',
+                    (int) (10000.0*(data_in.scale*((float)dsky_REG0)/SCALE_FLOAT)));
+            str_REG0[2] |= 0x80;
+            sprintf(str_REG1, "%c%05d", (dsky_REG1 >= 0) ? '+' : '-',
+                    (int) (10000.0*(data_in.scale*((float)dsky_REG1)/SCALE_FLOAT)));
+            str_REG1[2] |= 0x80;
+            sprintf(str_REG2, "%c%05d", (dsky_REG2 >= 0) ? '+' : '-',
+                    (int) (10000.0*(data_in.scale*((float)dsky_REG2)/SCALE_FLOAT)));
+            str_REG2[2] |= 0x80;
+#pragma GCC diagnostic pop
             sprintf(str_PROG, "%02d", dsky_prog);
             ltp305g_puts(str_REG0, DISP_REG0_0, 6);
             ltp305g_puts(str_REG1, DISP_REG1_0, 6);
