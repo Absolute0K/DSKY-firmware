@@ -104,10 +104,11 @@ Rm = 3.844e5  # 1 AU - Distance from Earth to the Sun
 Mp = Me
 Mc = Mcsm
 Ml = Mll
+SS = 10e3
 # Normalization parameters
-RR = Rm * 10e3
+RR = Rm * SS
 # RR = Re
-MM = Mp
+MM = Mp * SS
 TT = 365 * 24 * 60 * 60.0
 FF = (G * MM**2) / RR**2  # Unit force
 GG = (MM * G * TT**2) / (RR**3)
@@ -116,7 +117,7 @@ Mp = Mp / MM  # Normalized mass of Planet
 Ml = Ml / MM  # Normalized mass of Moon
 
 t_i = 0  # initial time = 0
-t_f = 120  # final time = 120 years
+t_f = 1200  # final time = ?
 
 N = 100 * t_f  # Max number of points for the array - 100 points per year
 t = np.linspace(t_i, t_f, N)  # time array from t_i to t_f with N points
@@ -429,6 +430,7 @@ def hohmann_transfer(event):
           format(r1, target_r2, delta_vc1, delta_vc2, acm))
 
     GGMp = GG * Mp / 10.0
+    rr0 = 1.0 / (sfinalrad.val * 10.0)
     rr1 = 1.0 / (r1 * 10.0)
     rr2 = 1.0 / (r2 * 10.0)
     rr3 = 1.0 / (10.0 * (r1 + target_r2) / 2.0)
@@ -455,6 +457,8 @@ def hohmann_transfer(event):
             np.sqrt(vatx_sqr) - np.sqrt(va_sqr_2),
             np.sqrt(vb_sqr_2) - np.sqrt(vbtx_sqr),
         ))
+    print("Vbtx_L:{:.5f}({:.5f}) Vbtx_M:{:.5f}({:.5f}) arg:{:.5f}({:.5f},{:.5f})\n"
+          .format(np.sqrt(GGMp * rr0), GGMp * rr0, np.sqrt(GGMp * rr2), GGMp * rr2, 1.0 - np.sqrt(((r1/r2)/2.0+1.0/2.0)**3), ((r1/r2)/2.0+1.0/2.0)**3, ((r1/r2)/2.0+1.0/2.0)))
     # print("GMp:{:.3f} 1/R1N:{:.3f} 1/R2N:{:.3f} ATX:{:.3f}\nVa:{:.3f}({:.3f}) Vb:{:.3f}({:.3f}) Vatx:{:.3f}({:.3f}) Vbtx:{:.3f}({:.3f}) V-delta:{:.3f} -> {:.3f}\n"\
     #       .format(GGMp*(2**14), rr1*(2**14), rr2*(2**14), rr3*(2**14), va_sqr_2*(2**14), np.sqrt(va_sqr_2)*(2**14), vb_sqr_2*(2**14), np.sqrt(vb_sqr_2)*(2**14), vatx_sqr*(2**14), \
     #               np.sqrt(vatx_sqr)*(2**14), vbtx_sqr*(2**14), np.sqrt(vbtx_sqr)*(2**14), (np.sqrt(vatx_sqr)-np.sqrt(va_sqr_2))*(2**14), (np.sqrt(vb_sqr_2)-np.sqrt(vbtx_sqr))*(2**14)))

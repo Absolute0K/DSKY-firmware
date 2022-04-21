@@ -74,12 +74,13 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                         if (strbuf[index_packet] == '>' && index_packet < NUM_BLU_PKTS-1)
                         {
                             strbuf[index_packet + 1] ='\0';
-                            // <+01234+12345+23456+34567 10 123 123123>
-                            // <+02322+30071+02322+30071 10 123 123123>
-                            // <+20000+20000+20000+20000 10 123 123123>
-                            sscanf((char*) strbuf, "<%*c%05o%*c%05o%*c%05o%*c%05o %d %d %llu>", 
+                            // <+01234+12345+23456+34567 10 10 1 123 123123>
+                            // <+02322+30071+02322+30071 10 10 1 123 123123>
+                            // <+20000+20000+20000+20000 10 10 1 123 123123>
+                            sscanf((char*) strbuf, "<%*c%05o%*c%05o%*c%05o%*c%05o %d %d %d %d %llu>", 
                                    &(data_in.GM), &(data_in.invRA), &(data_in.invRB), 
-                                   &(data_in.ATX), &(data_in.scale), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
+                                   &(data_in.ATX), &(data_in.scale[0]), &(data_in.scale[1]),
+                                   &(data_in.scale[2]), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
                             output_AGC_uart(data_in, pair_vn);
                             // current_time.tv_sec = data_in.mission_time;
                             index_packet = 0;

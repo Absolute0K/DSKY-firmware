@@ -117,13 +117,13 @@ static void uart_display_task(void *pvParameters)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-overflow"
             sprintf(str_REG0, "%c%05d", (dsky_REG0 >= 0) ? '+' : '-',
-                    (int) (10000.0*(data_in.scale*((float)dsky_REG0)/SCALE_FLOAT)));
+                    (int) (10000.0*(data_in.scale[0]*((float)dsky_REG0)/SCALE_FLOAT)));
             str_REG0[2] |= 0x80;
             sprintf(str_REG1, "%c%05d", (dsky_REG1 >= 0) ? '+' : '-',
-                    (int) (10000.0*(data_in.scale*((float)dsky_REG1)/SCALE_FLOAT)));
+                    (int) (10000.0*(data_in.scale[1]*((float)dsky_REG1)/SCALE_FLOAT)));
             str_REG1[2] |= 0x80;
             sprintf(str_REG2, "%c%05d", (dsky_REG2 >= 0) ? '+' : '-',
-                    (int) (10000.0*(data_in.scale*((float)dsky_REG2)/SCALE_FLOAT)));
+                    (int) (10000.0*(data_in.scale[2]*((float)dsky_REG2)/SCALE_FLOAT)));
             str_REG2[2] |= 0x80;
 #pragma GCC diagnostic pop
             sprintf(str_PROG, "%02d", dsky_prog);
