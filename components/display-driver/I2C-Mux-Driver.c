@@ -14,7 +14,6 @@
 #include "constants.h"
 #include "esp_log.h"
 #include "driver/i2c.h"
-#include "atomic-i2c.h"
 
 // Default unshifted 7-bit address
 static uint8_t dev_addr = QWIIC_MUX_DEFAULT_ADDRESS;

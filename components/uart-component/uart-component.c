@@ -20,8 +20,8 @@ static QueueHandle_t xQueue_UART0;
 const char char_SOP = '<';
 const char char_EOP = '>';
 
-#define PRI_UART_EVENT      (8)
-#define PRI_UART_DISP       (7)
+#define PRI_UART_EVENT      (4)
+#define PRI_UART_DISP       (3)
 #define SCALE_FLOAT         (16384.0)
 
 static void uart_event_task(void *pvParameters)
@@ -96,7 +96,7 @@ static void uart_display_task(void *pvParameters)
     for (;;)
     {
         /* Waiting for UART event. */
-        if (xQueueReceive(xQueue_packets, &packet, (TickType_t) 3000 / portTICK_PERIOD_MS))
+        if (xQueueReceive(xQueue_packets, &packet, (TickType_t) portMAX_DELAY))
         {
             /* Scan: <DSKYREG1_DSKYREG2_DSKYREG3_PROGNUM_LAMPS_DVA_DVATX_DVB_DVBTX> */
             packet.data[UART_PKT_SIZE - 1] = 0;

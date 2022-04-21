@@ -81,6 +81,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                                    &(data_in.GM), &(data_in.invRA), &(data_in.invRB), 
                                    &(data_in.ATX), &(data_in.scale), &(data_in.BURN_BABY_BURN), &(data_in.mission_time));
                             output_AGC_uart(data_in, pair_vn);
+                            // current_time.tv_sec = data_in.mission_time;
                             index_packet = 0;
                             break;
                         }

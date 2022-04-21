@@ -5,7 +5,7 @@
 #include "driver/gpio.h"
 #include "LED-Driver.h"
 
-#define PRI_KEYSTROKES      (6)
+#define PRI_KEYSTROKES      (2)
 
 static int id = 1;
 static uint64_t row_LUT[NUM_ROWS] = {17, 16, 15};

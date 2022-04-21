@@ -14,10 +14,8 @@
 #include "I2C-Mux-Driver.h"
 #include "constants.h"
 #include "esp_log.h"
-#include "atomic-i2c.h"
 #include <string.h>
 
-#define PRI_DISP_EVENT                     (4)
 #define LTP305G_GET_DRIVER_MUX_PORT(x)     (x / NUM_DRIVER_PER_PORT)
 #define LTP305G_GET_DRIVER_ID(x)           (x % NUM_DRIVER_PER_PORT)
 #define LTP305G_GET_DRIVER_ID_FROM_DISP(x) (x / NUM_DISP_PER_DRIVER)

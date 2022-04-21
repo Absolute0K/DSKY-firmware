@@ -24,12 +24,10 @@
 #include "keypad-component.h"
 #include "uart-component.h"
 #include "bluetooth-component.h"
-#include "atomic-i2c.h"
 #include "time.h"
 #include "sys/time.h"
 
-#define PRI_AGC_REPLY      (06)
-#define PRI_MISSIONBUILTIN (05)
+#define PRI_MISSIONBUILTIN (01)
 
 #define VERB_MISSIONTIME   (05)
 #define VERB_TESTDISP      (06)
@@ -112,7 +110,6 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    ret |= atomic_i2c_begin();
     ESP_ERROR_CHECK(ret);
 
     ESP_LOGI("MAIN", "Hello world!");
